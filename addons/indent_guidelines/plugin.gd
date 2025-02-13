@@ -74,8 +74,10 @@ class CodeEditorGuideLine extends Node:
 
   var code_edit: CodeEdit # Reference to CodeEdit
 
+
   func _init(p_code_edit: CodeEdit, exit_sig: Signal)-> void:
     code_edit = p_code_edit
+    
     exit_sig.connect(func()->void: self.queue_free())
 
     code_edit.add_child(self)
@@ -99,13 +101,18 @@ class CodeEditorGuideLine extends Node:
     var space_width: float = font.get_char_size(" ".unicode_at(0), font_size).x
     var v_scroll: float = code_edit.scroll_vertical
     var h_scroll: float = code_edit.scroll_horizontal
+    
+    var indent_size: int = code_edit.indent_size  
+    
+        
+    
 
     # X Offset
     var guideline_offset: float
     if codeblock_guideline_drawside == CodeblockGuidelinesOffset.CODEBLOCK_GUIDE_OFFSET_LEFT:
       guideline_offset = 0.0
     elif codeblock_guideline_drawside == CodeblockGuidelinesOffset.CODEBLOCK_GUIDE_OFFSET_MIDDLE:
-      guideline_offset = space_width / 2.0
+      guideline_offset = space_width * 0.5
     elif codeblock_guideline_drawside == CodeblockGuidelinesOffset.CODEBLOCK_GUIDE_OFFSET_RIGHT:
       guideline_offset = space_width
 
@@ -121,17 +128,29 @@ class CodeEditorGuideLine extends Node:
     # Inlude last ten lines
     if lines_count - visible_lines_to <= 10:
       visible_lines_to = lines_count
+    
+    
+    for l: int in code_edit.get_line_count():
+        var il: int = code_edit.get_indent_level(l)
+        if ( il > 0):
+            indent_size = il  
+            break
+    
 
     # Generate lines
-    var lines_builder: LinesInCodeEditor = LinesInCodeEditor.new(code_edit)
+    var lines_builder: LinesInCodeEditor = LinesInCodeEditor.new(code_edit, indent_size)
     lines_builder.build(visible_lines_from, visible_lines_to)
+    
+    
+    
+    
 
     # Prepare draw
     var points: PackedVector2Array
     var colors: PackedColorArray
     var block_ends: PackedInt32Array
     for line: LineInCodeEditor in lines_builder.output:
-      var _x: float = guideline_offset + xmargin_beg - h_scroll + line.indent * code_edit.indent_size * space_width
+      var _x: float = guideline_offset + xmargin_beg - h_scroll + line.indent * indent_size * space_width
       # Hide lines under gutters
       if _x < xmargin_beg: continue
 
@@ -151,8 +170,8 @@ class CodeEditorGuideLine extends Node:
       colors.append(color)
 
       if codeblock_guidelines_style == CodeblockGuidelinesStyle.CODEBLOCK_GUIDE_STYLE_LINE_CLOSE and line.close_length > 0:
-        var line_indent: int = code_edit.get_indent_level(line_no) / code_edit.indent_size + 1
-        var point_side: Vector2 = point_end + Vector2(line.close_length * code_edit.indent_size * space_width - guideline_offset, 0.0)
+        var line_indent: int = code_edit.get_indent_level(line_no) / indent_size + 1
+        var point_side: Vector2 = point_end + Vector2(line.close_length * indent_size * space_width - guideline_offset, 0.0)
 
         points.append_array([point_end, point_side])
         colors.append(color)
@@ -170,9 +189,11 @@ class LinesInCodeEditor:
   var lines: Array[LineInCodeEditor] = []
 
   var ce: CodeEdit
+  var indent_size: int
 
-  func _init(p_ce: CodeEdit) -> void:
+  func _init(p_ce: CodeEdit, p_indent_size: int) -> void:    
     self.ce = p_ce
+    self.indent_size = p_indent_size
 
   # Check if line is empty
   func is_line_empty(p_line: int)-> bool:
@@ -180,7 +201,7 @@ class LinesInCodeEditor:
 
   # Return indent level 0,1,2,3..
   func indent_level(p_line: int)-> int:
-    return ce.get_indent_level(p_line) / ce.indent_size
+    return ce.get_indent_level(p_line) / self.indent_size
 
   # Return comment index in line
   func get_comment_index(p_line: int)-> int:
@@ -272,7 +293,7 @@ class LinesInCodeEditor:
       var v: LineInCodeEditor = lines[i]
       if p_lines_to == ce.get_line_count():
         v.lineno_to = (p_lines_to - 1) - skiped_lines
-        v.close_length = ce.get_indent_level(v.lineno_to) / ce.indent_size - v.indent
+        v.close_length = ce.get_indent_level(v.lineno_to) / self.indent_size - v.indent
         v.length += 1 - skiped_lines
       else:
         v.lineno_to = p_lines_to - 1
