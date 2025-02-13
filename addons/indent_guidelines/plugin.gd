@@ -52,22 +52,14 @@ func _editor_script_changed(_s: Script)->void:
 
 class CodeEditorGuideLine extends Node:
 
-  enum CodeblockGuidelinesStyle {
-    CODEBLOCK_GUIDE_STYLE_NONE,
-    CODEBLOCK_GUIDE_STYLE_LINE,
-    CODEBLOCK_GUIDE_STYLE_LINE_CLOSE,
-  }
+  enum GuidelinesStyle { NONE, LINE, LINE_CLOSE}
 
-  enum CodeblockGuidelinesOffset {
-    CODEBLOCK_GUIDE_OFFSET_LEFT,
-    CODEBLOCK_GUIDE_OFFSET_MIDDLE,
-    CODEBLOCK_GUIDE_OFFSET_RIGHT,
-  }
+  enum GuidelinesOffset {LEFT, MIDDLE, RIGHT }
 
   const codeblock_guideline_color = Color(0.8, 0.8, 0.8, 0.3)
   const codeblock_guideline_active_color = Color(0.8, 0.8, 0.8, 0.55)
-  const codeblock_guidelines_style: CodeblockGuidelinesStyle = CodeblockGuidelinesStyle.CODEBLOCK_GUIDE_STYLE_LINE_CLOSE
-  const codeblock_guideline_drawside: CodeblockGuidelinesOffset = CodeblockGuidelinesOffset.CODEBLOCK_GUIDE_OFFSET_MIDDLE
+  const codeblock_guidelines_style: GuidelinesStyle = GuidelinesStyle.LINE_CLOSE
+  const codeblock_guideline_drawside: GuidelinesOffset = GuidelinesOffset.MIDDLE
 
   const editor_scale: int = 100 # Used to scale values, but almost useless now
   const codeblock_guideline_width: float = 1.0
@@ -77,7 +69,7 @@ class CodeEditorGuideLine extends Node:
 
   func _init(p_code_edit: CodeEdit, exit_sig: Signal)-> void:
     code_edit = p_code_edit
-    
+
     exit_sig.connect(func()->void: self.queue_free())
 
     code_edit.add_child(self)
@@ -89,7 +81,7 @@ class CodeEditorGuideLine extends Node:
     return p_val * (float(editor_scale) / 100.0)
 
   func _draw_appendix()-> void:
-    if codeblock_guidelines_style == CodeblockGuidelinesStyle.CODEBLOCK_GUIDE_STYLE_NONE: return
+    if codeblock_guidelines_style == GuidelinesStyle.NONE: return
 
     # Per draw "Consts"
     var lines_count: int = code_edit.get_line_count()
@@ -101,19 +93,19 @@ class CodeEditorGuideLine extends Node:
     var space_width: float = font.get_char_size(" ".unicode_at(0), font_size).x
     var v_scroll: float = code_edit.scroll_vertical
     var h_scroll: float = code_edit.scroll_horizontal
-    
-    var indent_size: int = code_edit.indent_size  
-    
-        
-    
+
+    var indent_size: int = code_edit.indent_size
+
+
+
 
     # X Offset
     var guideline_offset: float
-    if codeblock_guideline_drawside == CodeblockGuidelinesOffset.CODEBLOCK_GUIDE_OFFSET_LEFT:
+    if codeblock_guideline_drawside == GuidelinesOffset.LEFT:
       guideline_offset = 0.0
-    elif codeblock_guideline_drawside == CodeblockGuidelinesOffset.CODEBLOCK_GUIDE_OFFSET_MIDDLE:
+    elif codeblock_guideline_drawside == GuidelinesOffset.MIDDLE:
       guideline_offset = space_width * 0.5
-    elif codeblock_guideline_drawside == CodeblockGuidelinesOffset.CODEBLOCK_GUIDE_OFFSET_RIGHT:
+    elif codeblock_guideline_drawside == GuidelinesOffset.RIGHT:
       guideline_offset = space_width
 
     var caret_idx: int = code_edit.get_caret_line()
@@ -128,22 +120,22 @@ class CodeEditorGuideLine extends Node:
     # Inlude last ten lines
     if lines_count - visible_lines_to <= 10:
       visible_lines_to = lines_count
-    
-    
+
+
     for l: int in code_edit.get_line_count():
-        var il: int = code_edit.get_indent_level(l)
-        if ( il > 0):
-            indent_size = il  
-            break
-    
+      var il: int = code_edit.get_indent_level(l)
+      if ( il > 0):
+        indent_size = il
+        break
+
 
     # Generate lines
     var lines_builder: LinesInCodeEditor = LinesInCodeEditor.new(code_edit, indent_size)
     lines_builder.build(visible_lines_from, visible_lines_to)
-    
-    
-    
-    
+
+
+
+
 
     # Prepare draw
     var points: PackedVector2Array
@@ -169,7 +161,7 @@ class CodeEditorGuideLine extends Node:
       points.append_array([point_start, point_end])
       colors.append(color)
 
-      if codeblock_guidelines_style == CodeblockGuidelinesStyle.CODEBLOCK_GUIDE_STYLE_LINE_CLOSE and line.close_length > 0:
+      if codeblock_guidelines_style == GuidelinesStyle.LINE_CLOSE and line.close_length > 0:
         var line_indent: int = code_edit.get_indent_level(line_no) / indent_size + 1
         var point_side: Vector2 = point_end + Vector2(line.close_length * indent_size * space_width - guideline_offset, 0.0)
 
@@ -191,7 +183,7 @@ class LinesInCodeEditor:
   var ce: CodeEdit
   var indent_size: int
 
-  func _init(p_ce: CodeEdit, p_indent_size: int) -> void:    
+  func _init(p_ce: CodeEdit, p_indent_size: int) -> void:
     self.ce = p_ce
     self.indent_size = p_indent_size
 
