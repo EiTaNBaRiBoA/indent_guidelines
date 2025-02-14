@@ -2,9 +2,7 @@
 extends EditorPlugin
 
 signal sig_plugin_disabled
-
-# Draw indent guidelines
-const draw_guidelines: bool = true
+const META_KEY: String = "has_indent_guideline_plugin"
 
 func _enter_tree() -> void:
   if not Engine.is_editor_hint(): return
@@ -24,20 +22,14 @@ func _editor_script_changed(_s: Script)->void:
   var base_editor: Control = editor_base.get_base_editor()
   if base_editor is CodeEdit:
     var code_edit: CodeEdit = base_editor
-
-    # Guideline
-    if draw_guidelines:
-      var found: bool = false
-      for n: Node in code_edit.get_children():
-        if n is CodeEditorGuideLine:
-          found = true
-          break
-      if not found: CodeEditorGuideLine.new(code_edit, sig_plugin_disabled)
-
+    var found: bool = code_edit.get_meta(META_KEY, false)    
+    if not found: 
+      code_edit.set_meta(META_KEY, true)
+      CodeEditorGuideLine.new(code_edit, sig_plugin_disabled)
+        
 #---------------------------------------------
 
 # Based on https://github.com/godotengine/godot/pull/65757
-
 class CodeEditorGuideLine extends Node:
 
   enum GuidelinesStyle { NONE = 0, LINE, LINE_CLOSE}
@@ -55,11 +47,13 @@ class CodeEditorGuideLine extends Node:
 
   var code_edit: CodeEdit # Reference to CodeEdit
 
-
   func _init(p_code_edit: CodeEdit, exit_sig: Signal)-> void:
     code_edit = p_code_edit
 
-    exit_sig.connect(func()->void: self.queue_free())
+    exit_sig.connect(func()->void:
+       p_code_edit.remove_meta(META_KEY)
+       self.queue_free()
+    )
 
     code_edit.add_child(self)
     code_edit.draw.connect(_draw_appendix)
@@ -148,25 +142,26 @@ class LinesInCodeEditor:
 
   var ce: CodeEdit
   var indent_size: int
-
-  func refresh_cache() -> void:
-    self.indent_cache.clear()
+  var lines_count: int
 
   func _init(p_ce: CodeEdit) -> void:
     self.ce = p_ce
     self.indent_size = p_ce.indent_size
     
-    for l: int in p_ce.get_line_count():
+    self.lines_count = p_ce.get_line_count()
+    
+    # get indent size from
+    for l: int in self.lines_count:
+      if self.is_line_empty(l): continue
+      if self.is_line_full_commented(l): continue
       var il: int = p_ce.get_indent_level(l)
       if ( il > 0):
         self.indent_size = il
-        break
-
-  # Check if line is empty
-  func is_line_empty(p_line: int)-> bool:
-    return ce.get_line(p_line).strip_edges().length() == 0
+        break          
+  
 
   # Return indent level 0,1,2,3..
+  # TODO: invent how not to use `indent_size`
   func indent_level(p_line: int)-> int:
     return ce.get_indent_level(p_line) / self.indent_size
 
@@ -174,6 +169,11 @@ class LinesInCodeEditor:
   # !!!!!!!!! Seems not work like described
   # func get_comment_index(p_line: int)-> int:
   #  return ce.is_in_comment(p_line)
+  
+  # Check if line is empty
+  func is_line_empty(p_line: int)-> bool:    
+    #return ce.get_line(p_line).strip_edges().length() == 0
+    return ce.get_line(p_line).length() == ce.get_first_non_whitespace_column(p_line)
 
   # Check if first visible character in line is comment
   func is_line_full_commented(p_line: int)->bool:
@@ -183,8 +183,7 @@ class LinesInCodeEditor:
   func build(p_lines_from: int, p_lines_to: int)->void:
     var line: int = p_lines_from
     var skiped_lines: int = 0
-    var internal_line:int = -1 
-
+    var internal_line:int = -1
     
     while line < p_lines_to:
       internal_line += 1
@@ -259,7 +258,7 @@ class LinesInCodeEditor:
     #End of cycle
 
     # Output all other lines
-    var lines_count: int = ce.get_line_count()
+    var lines_count: int = self.lines_count
     for i:int in lines.size():
       var v: LineInCodeEditor = lines[i]
       if p_lines_to == lines_count:
