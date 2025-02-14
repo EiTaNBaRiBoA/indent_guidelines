@@ -6,9 +6,6 @@ signal sig_plugin_disabled
 # Draw indent guidelines
 const draw_guidelines: bool = true
 
-# Draw sible line gutter
-const draw_linegutter: bool = true
-
 func _enter_tree() -> void:
   if not Engine.is_editor_hint(): return
   var script_editor: ScriptEditor = EditorInterface.get_script_editor()
@@ -28,15 +25,6 @@ func _editor_script_changed(_s: Script)->void:
   if base_editor is CodeEdit:
     var code_edit: CodeEdit = base_editor
 
-    # Gutter
-    if draw_linegutter:
-      var found: bool = false
-      for n: Node in code_edit.get_children():
-        if n is CodeEditorGutterLine:
-          found = true
-          break
-      if not found: CodeEditorGutterLine.new(code_edit, sig_plugin_disabled)
-
     # Guideline
     if draw_guidelines:
       var found: bool = false
@@ -52,14 +40,15 @@ func _editor_script_changed(_s: Script)->void:
 
 class CodeEditorGuideLine extends Node:
 
-  enum GuidelinesStyle { NONE, LINE, LINE_CLOSE}
+  enum GuidelinesStyle { NONE = 0, LINE, LINE_CLOSE}
 
-  enum GuidelinesOffset {LEFT, MIDDLE, RIGHT }
+  enum GuidelinesOffset {LEFT = 0, MIDDLE, RIGHT}
+  const OffsetsFactor: Array[float] = [0.0, 0.5, 1.0]
 
   const codeblock_guideline_color = Color(0.8, 0.8, 0.8, 0.3)
   const codeblock_guideline_active_color = Color(0.8, 0.8, 0.8, 0.55)
   const codeblock_guidelines_style: GuidelinesStyle = GuidelinesStyle.LINE_CLOSE
-  const codeblock_guideline_drawside: GuidelinesOffset = GuidelinesOffset.MIDDLE
+  const codeblock_guideline_drawside: GuidelinesOffset = GuidelinesOffset.LEFT
 
   const editor_scale: int = 100 # Used to scale values, but almost useless now
   const codeblock_guideline_width: float = 1.0
@@ -82,6 +71,7 @@ class CodeEditorGuideLine extends Node:
 
   func _draw_appendix()-> void:
     if codeblock_guidelines_style == GuidelinesStyle.NONE: return
+    var t: int = Time.get_ticks_usec()
 
     # Per draw "Consts"
     var lines_count: int = code_edit.get_line_count()
@@ -94,19 +84,8 @@ class CodeEditorGuideLine extends Node:
     var v_scroll: float = code_edit.scroll_vertical
     var h_scroll: float = code_edit.scroll_horizontal
 
-    var indent_size: int = code_edit.indent_size
-
-
-
-
-    # X Offset
-    var guideline_offset: float
-    if codeblock_guideline_drawside == GuidelinesOffset.LEFT:
-      guideline_offset = 0.0
-    elif codeblock_guideline_drawside == GuidelinesOffset.MIDDLE:
-      guideline_offset = space_width * 0.5
-    elif codeblock_guideline_drawside == GuidelinesOffset.RIGHT:
-      guideline_offset = space_width
+    # X Offset    
+    var guideline_offset: float = OffsetsFactor[codeblock_guideline_drawside] * space_width
 
     var caret_idx: int = code_edit.get_caret_line()
 
@@ -121,32 +100,20 @@ class CodeEditorGuideLine extends Node:
     if lines_count - visible_lines_to <= 10:
       visible_lines_to = lines_count
 
-
-    for l: int in code_edit.get_line_count():
-      var il: int = code_edit.get_indent_level(l)
-      if ( il > 0):
-        indent_size = il
-        break
-
-
     # Generate lines
-    var lines_builder: LinesInCodeEditor = LinesInCodeEditor.new(code_edit, indent_size)
+    var lines_builder: LinesInCodeEditor = LinesInCodeEditor.new(code_edit)
     lines_builder.build(visible_lines_from, visible_lines_to)
-
-
-
-
 
     # Prepare draw
     var points: PackedVector2Array
     var colors: PackedColorArray
     var block_ends: PackedInt32Array
     for line: LineInCodeEditor in lines_builder.output:
-      var _x: float = guideline_offset + xmargin_beg - h_scroll + line.indent * indent_size * space_width
+      var _x: float = guideline_offset + xmargin_beg - h_scroll + line.indent * lines_builder.indent_size * space_width
       # Hide lines under gutters
       if _x < xmargin_beg: continue
 
-      # Line color
+      #  Line color
       var color: Color = codeblock_guideline_color
       if caret_idx > line.lineno_from and caret_idx <= line.lineno_to and lines_builder.indent_level(caret_idx) == line.indent + 1:
         # TODO: If caret not visible on screen line will not highlighted
@@ -162,8 +129,8 @@ class CodeEditorGuideLine extends Node:
       colors.append(color)
 
       if codeblock_guidelines_style == GuidelinesStyle.LINE_CLOSE and line.close_length > 0:
-        var line_indent: int = code_edit.get_indent_level(line_no) / indent_size + 1
-        var point_side: Vector2 = point_end + Vector2(line.close_length * indent_size * space_width - guideline_offset, 0.0)
+        var line_indent: int = lines_builder.indent_level(line_no) + 1
+        var point_side: Vector2 = point_end + Vector2(line.close_length * lines_builder.indent_size * space_width - guideline_offset, 0.0)
 
         points.append_array([point_end, point_side])
         colors.append(color)
@@ -173,6 +140,7 @@ class CodeEditorGuideLine extends Node:
     if points.size() > 0:
       # As documentation said, no need to scale line width
       RenderingServer.canvas_item_add_multiline(code_edit.get_canvas_item(), points, colors, codeblock_guideline_width)
+    print(Time.get_ticks_usec() - t)  
     pass
 
 # Lines builder
@@ -183,9 +151,18 @@ class LinesInCodeEditor:
   var ce: CodeEdit
   var indent_size: int
 
-  func _init(p_ce: CodeEdit, p_indent_size: int) -> void:
+  func refresh_cache() -> void:
+    self.indent_cache.clear()
+
+  func _init(p_ce: CodeEdit) -> void:
     self.ce = p_ce
-    self.indent_size = p_indent_size
+    self.indent_size = p_ce.indent_size
+    
+    for l: int in p_ce.get_line_count():
+      var il: int = p_ce.get_indent_level(l)
+      if ( il > 0):
+        self.indent_size = il
+        break
 
   # Check if line is empty
   func is_line_empty(p_line: int)-> bool:
@@ -196,18 +173,21 @@ class LinesInCodeEditor:
     return ce.get_indent_level(p_line) / self.indent_size
 
   # Return comment index in line
-  func get_comment_index(p_line: int)-> int:
-    return ce.is_in_comment(p_line)
+  # !!!!!!!!! Seems not work like described
+  # func get_comment_index(p_line: int)-> int:
+  #  return ce.is_in_comment(p_line)
 
   # Check if first visible character in line is comment
   func is_line_full_commented(p_line: int)->bool:
-    return get_comment_index(p_line) == ce.get_first_non_whitespace_column(p_line)
+    return ce.is_in_comment(p_line) != -1 and ce.get_first_non_whitespace_column(p_line) >= 0
 
   # Main func
   func build(p_lines_from: int, p_lines_to: int)->void:
     var line: int = p_lines_from
     var skiped_lines: int = 0
-    var internal_line:int = -1
+    var internal_line:int = -1 
+
+    
     while line < p_lines_to:
       internal_line += 1
       #If line empty, count it and pass to next line
@@ -218,11 +198,11 @@ class LinesInCodeEditor:
 
       # Current line indent
       var line_indent: int = self.indent_level(line)
-      if line_indent == 0:
-        if is_line_full_commented(line):
-          skiped_lines += 1
-          line += 1
-          continue
+      #if line_indent == 0:
+      if is_line_full_commented(line):
+        skiped_lines += 1
+        line += 1
+        continue
 
       # Close lines with indent > current line_indent
       for i:int in range(line_indent, lines.size()):
@@ -281,11 +261,12 @@ class LinesInCodeEditor:
     #End of cycle
 
     # Output all other lines
+    var lines_count: int = ce.get_line_count()
     for i:int in lines.size():
       var v: LineInCodeEditor = lines[i]
-      if p_lines_to == ce.get_line_count():
+      if p_lines_to == lines_count:
         v.lineno_to = (p_lines_to - 1) - skiped_lines
-        v.close_length = ce.get_indent_level(v.lineno_to) / self.indent_size - v.indent
+        v.close_length = self.indent_level(v.lineno_to) - v.indent
         v.length += 1 - skiped_lines
       else:
         v.lineno_to = p_lines_to - 1
@@ -301,31 +282,3 @@ class LineInCodeEditor:
   var lineno_from: int = -1 # Line "from" number in CodeEdit
   var lineno_to: int = -1 # Line "to" number in CodeEdit
   var close_length: int = 0 # Side/Close line length
-
-# Single line gutter
-class CodeEditorGutterLine extends Node:
-
-  const gutter_color = Color(0.8, 0.8, 0.8, 0.5)
-
-  var code_edit: CodeEdit
-  var new_gutter: int = -1
-
-  func _init(p_code_edit: CodeEdit, exit_sig: Signal)-> void:
-    code_edit = p_code_edit
-    exit_sig.connect(
-      func()->void:
-        if new_gutter > -1: code_edit.remove_gutter(new_gutter)
-        self.queue_free()
-    )
-    code_edit.add_child(self)
-
-    new_gutter = code_edit.get_gutter_count()
-    code_edit.add_gutter(new_gutter)
-    code_edit.set_gutter_type(new_gutter, TextEdit.GUTTER_TYPE_CUSTOM)
-    code_edit.set_gutter_width(new_gutter, 1)
-    code_edit.set_gutter_name(new_gutter, "Line gutter")
-    code_edit.set_gutter_custom_draw(new_gutter, _gutter_custom_draw)
-    code_edit.set_gutter_draw(new_gutter, true)
-
-  func _gutter_custom_draw(line: int, gutter: int, p_region: Rect2) -> void:
-    code_edit.draw_line(p_region.position, p_region.position + p_region.size, gutter_color, 1.0, false )
