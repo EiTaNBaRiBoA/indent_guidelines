@@ -71,7 +71,6 @@ class CodeEditorGuideLine extends Node:
 
   func _draw_appendix()-> void:
     if codeblock_guidelines_style == GuidelinesStyle.NONE: return
-    var t: int = Time.get_ticks_usec()
 
     # Per draw "Consts"
     var lines_count: int = code_edit.get_line_count()
@@ -140,7 +139,6 @@ class CodeEditorGuideLine extends Node:
     if points.size() > 0:
       # As documentation said, no need to scale line width
       RenderingServer.canvas_item_add_multiline(code_edit.get_canvas_item(), points, colors, codeblock_guideline_width)
-    print(Time.get_ticks_usec() - t)  
     pass
 
 # Lines builder
