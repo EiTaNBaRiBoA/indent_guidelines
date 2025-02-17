@@ -188,18 +188,12 @@ class LinesInCodeEditor:
     while line < p_lines_to:
       internal_line += 1
       #If line empty, count it and pass to next line
-      if is_line_empty(line):
+      if is_line_empty(line) or is_line_full_commented(line):
         skiped_lines += 1
         line += 1
         continue
-
-      # Current line indent
-      var line_indent: int = self.indent_level(line)
-      #if line_indent == 0:
-      if is_line_full_commented(line):
-        skiped_lines += 1
-        line += 1
-        continue
+        
+      var line_indent: int = self.indent_level(line) # Current line indent  
 
       # Close lines with indent > current line_indent
       for i:int in range(line_indent, lines.size()):
@@ -255,8 +249,8 @@ class LinesInCodeEditor:
             break # Break for cycle
           if not subline_found: line = p_lines_to
       line += 1
-    #End of cycle
-
+    #End of cycle    
+    
     # Output all other lines
     var lines_count: int = self.lines_count
     for i:int in lines.size():
@@ -264,10 +258,11 @@ class LinesInCodeEditor:
       if p_lines_to == lines_count:
         v.lineno_to = (p_lines_to - 1) - skiped_lines
         v.close_length = self.indent_level(v.lineno_to) - v.indent
-        v.length += 1 - skiped_lines
+        #v.length += 1 - skiped_lines # At end of file there is bug with lines
+        
       else:
         v.lineno_to = p_lines_to - 1
-        v.length += 1
+        v.length += 1 
       output.append(v)
     lines.resize(0)
 
