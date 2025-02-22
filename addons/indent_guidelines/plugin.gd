@@ -22,37 +22,51 @@ func _editor_script_changed(_s: Script)->void:
   var base_editor: Control = editor_base.get_base_editor()
   if base_editor is CodeEdit:
     var code_edit: CodeEdit = base_editor
-    var found: bool = code_edit.get_meta(META_KEY, false)    
-    if not found: 
+    var found: bool = code_edit.get_meta(META_KEY, false)
+    if not found:
       code_edit.set_meta(META_KEY, true)
       CodeEditorGuideLine.new(code_edit, sig_plugin_disabled)
-        
+
 #---------------------------------------------
 
 # Based on https://github.com/godotengine/godot/pull/65757
 class CodeEditorGuideLine extends Node:
 
-  enum GuidelinesStyle { NONE = 0, LINE, LINE_CLOSE}
-
+  # Guidelines
+  enum GuidelinesStyle { LINE, LINE_CLOSE}
   enum GuidelinesOffset {LEFT = 0, MIDDLE, RIGHT}
+  const guideline_color = Color(0.8, 0.8, 0.8, 0.3)
+  const guideline_active_color = Color(0.8, 0.8, 0.8, 0.55)
+  const guidelines_style: GuidelinesStyle = GuidelinesStyle.LINE_CLOSE
+  const guideline_drawside: GuidelinesOffset = GuidelinesOffset.MIDDLE
+
+  const guideline_width: float = 1.0
+  const guideline_y_offset: float = -2.0 # Used for draw guidelines a bit upper
+
+  # Fullheight line
+  const draw_fullheight_line: bool = true
+  const fillheight_line_color = Color(0.9, 0.9, 0.9, 0.1)
+  const fillheight_x_offset: float = -2.0
+
+  # Folded code marks
+  const draw_foldmarks: bool = true
+  const foldmark_color = Color(0.9, 0.9, 0.9, 0.9)
+  const foldmark_width: float = 3.0
+  const foldmark_x_offset: float = -3.0
+
+
+  # Some consts
   const OffsetsFactor: Array[float] = [0.0, 0.5, 1.0]
-
-  const codeblock_guideline_color = Color(0.8, 0.8, 0.8, 0.3)
-  const codeblock_guideline_active_color = Color(0.8, 0.8, 0.8, 0.55)
-  const codeblock_guidelines_style: GuidelinesStyle = GuidelinesStyle.LINE_CLOSE
-  const codeblock_guideline_drawside: GuidelinesOffset = GuidelinesOffset.LEFT
-
   const editor_scale: int = 100 # Used to scale values, but almost useless now
-  const codeblock_guideline_width: float = 1.0
+
 
   var code_edit: CodeEdit # Reference to CodeEdit
-
   func _init(p_code_edit: CodeEdit, exit_sig: Signal)-> void:
     code_edit = p_code_edit
 
     exit_sig.connect(func()->void:
-       p_code_edit.remove_meta(META_KEY)
-       self.queue_free()
+      p_code_edit.remove_meta(META_KEY)
+      self.queue_free()
     )
 
     code_edit.add_child(self)
@@ -64,8 +78,6 @@ class CodeEditorGuideLine extends Node:
     return p_val * (float(editor_scale) / 100.0)
 
   func _draw_appendix()-> void:
-    if codeblock_guidelines_style == GuidelinesStyle.NONE: return
-
     # Per draw "Consts"
     var lines_count: int = code_edit.get_line_count()
     var style_box: StyleBox = code_edit.get_theme_stylebox("normal")
@@ -77,8 +89,8 @@ class CodeEditorGuideLine extends Node:
     var v_scroll: float = code_edit.scroll_vertical
     var h_scroll: float = code_edit.scroll_horizontal
 
-    # X Offset    
-    var guideline_offset: float = OffsetsFactor[codeblock_guideline_drawside] * space_width
+    # X Offset
+    var guideline_offset: float = OffsetsFactor[guideline_drawside] * space_width
 
     var caret_idx: int = code_edit.get_caret_line()
 
@@ -101,44 +113,66 @@ class CodeEditorGuideLine extends Node:
     var points: PackedVector2Array
     var colors: PackedColorArray
     var block_ends: PackedInt32Array
+
     for line: LineInCodeEditor in lines_builder.output:
-      var _x: float = guideline_offset + xmargin_beg - h_scroll + line.indent * lines_builder.indent_size * space_width
+      var _x: float = xmargin_beg - h_scroll + guideline_offset + line.indent * lines_builder.indent_size * space_width
       # Hide lines under gutters
       if _x < xmargin_beg: continue
 
       #  Line color
-      var color: Color = codeblock_guideline_color
+      var color: Color = guideline_color
       if caret_idx > line.lineno_from and caret_idx <= line.lineno_to and lines_builder.indent_level(caret_idx) == line.indent + 1:
         # TODO: If caret not visible on screen line will not highlighted
-        color = codeblock_guideline_active_color
+        color = guideline_active_color
 
       # // Stack multiple guidelines.
       var line_no: int = line.lineno_to
       var offset_y: float = scaled(minf(block_ends.count(line_no) * 2.0, font.get_height(font_size) / 2.0) + 2.0)
 
-      var point_start: Vector2 = Vector2(_x, row_height * (line.start - vscroll_delta))
-      var point_end: Vector2 = point_start + Vector2(0.0, row_height * line.length - offset_y)
+      var point_start: Vector2 = Vector2(_x, row_height * (line.start - vscroll_delta) + guideline_y_offset)
+      var point_end: Vector2 = point_start + Vector2(0.0, row_height * line.length - offset_y + guideline_y_offset)
       points.append_array([point_start, point_end])
       colors.append(color)
 
-      if codeblock_guidelines_style == GuidelinesStyle.LINE_CLOSE and line.close_length > 0:
-        var line_indent: int = lines_builder.indent_level(line_no) + 1
+      if guidelines_style == GuidelinesStyle.LINE_CLOSE and line.close_length > 0:
+        #var line_indent: int = lines_builder.indent_level(line_no) + 1
         var point_side: Vector2 = point_end + Vector2(line.close_length * lines_builder.indent_size * space_width - guideline_offset, 0.0)
 
         points.append_array([point_end, point_side])
         colors.append(color)
         block_ends.append(line_no)
 
+    var rid: RID = code_edit.get_canvas_item()
     # Draw lines
     if points.size() > 0:
       # As documentation said, no need to scale line width
-      RenderingServer.canvas_item_add_multiline(code_edit.get_canvas_item(), points, colors, codeblock_guideline_width)
-    pass
+      RenderingServer.canvas_item_add_multiline(rid, points, colors, guideline_width)
+
+    if draw_fullheight_line:
+      var _x: float = xmargin_beg + fillheight_x_offset
+      RenderingServer.canvas_item_add_line(rid, Vector2(_x, 0), Vector2(_x, code_edit.size.y), fillheight_line_color, 2.0 )
+      pass
+
+    if draw_foldmarks:
+      var _x: float = xmargin_beg + foldmark_x_offset
+      var folded_lines: Array[int] = code_edit.get_folded_lines()
+
+      var fm_points: PackedVector2Array
+      var fm_colors: PackedColorArray
+      for internal_line: int in lines_builder.foldedlines:
+        var point_start: Vector2 = Vector2(_x, row_height * (internal_line - vscroll_delta))
+        var point_end: Vector2 = point_start + Vector2(0.0, row_height)
+        fm_points.append_array([point_start, point_end])
+        fm_colors.append(foldmark_color)
+      if fm_points.size() > 0:
+        RenderingServer.canvas_item_add_multiline(rid, fm_points, fm_colors, foldmark_width)
+    pass # /_draw_appendix
+
 
 # Lines builder
 class LinesInCodeEditor:
   var output: Array[LineInCodeEditor] = []
-  var lines: Array[LineInCodeEditor] = []
+  var foldedlines: PackedInt32Array = []
 
   var ce: CodeEdit
   var indent_size: int
@@ -147,9 +181,9 @@ class LinesInCodeEditor:
   func _init(p_ce: CodeEdit) -> void:
     self.ce = p_ce
     self.indent_size = p_ce.indent_size
-    
+
     self.lines_count = p_ce.get_line_count()
-    
+
     # get indent size from
     for l: int in self.lines_count:
       if self.is_line_empty(l): continue
@@ -157,8 +191,7 @@ class LinesInCodeEditor:
       var il: int = p_ce.get_indent_level(l)
       if ( il > 0):
         self.indent_size = il
-        break          
-  
+        break
 
   # Return indent level 0,1,2,3..
   # TODO: invent how not to use `indent_size`
@@ -169,9 +202,9 @@ class LinesInCodeEditor:
   # !!!!!!!!! Seems not work like described
   # func get_comment_index(p_line: int)-> int:
   #  return ce.is_in_comment(p_line)
-  
+
   # Check if line is empty
-  func is_line_empty(p_line: int)-> bool:    
+  func is_line_empty(p_line: int)-> bool:
     #return ce.get_line(p_line).strip_edges().length() == 0
     return ce.get_line(p_line).length() == ce.get_first_non_whitespace_column(p_line)
 
@@ -181,33 +214,38 @@ class LinesInCodeEditor:
 
   # Main func
   func build(p_lines_from: int, p_lines_to: int)->void:
-    var line: int = p_lines_from
     var skiped_lines: int = 0
-    var internal_line:int = -1
-    
+    var internal_line: int = -1
+    var tmp_lines: Array[LineInCodeEditor] = []
+    var skip_was_folded: bool = false
+
+    var line: int = p_lines_from
+
     while line < p_lines_to:
       internal_line += 1
+
       #If line empty, count it and pass to next line
-      if is_line_empty(line) or is_line_full_commented(line):
+      var current_line_folded: bool = ce.is_line_folded(line)
+      if (is_line_empty(line) or is_line_full_commented(line)) and !current_line_folded :
         skiped_lines += 1
         line += 1
         continue
-        
-      var line_indent: int = self.indent_level(line) # Current line indent  
+
+      var line_indent: int = self.indent_level(line) # Current line indent
 
       # Close lines with indent > current line_indent
-      for i:int in range(line_indent, lines.size()):
-        var v: LineInCodeEditor = lines[i]
+      for i:int in range(line_indent, tmp_lines.size()):
+        var v: LineInCodeEditor = tmp_lines[i]
         v.lineno_to = line - skiped_lines - 1
         v.close_length = self.indent_level(v.lineno_to) - v.indent
+        if skip_was_folded: v.close_length -= 1 # Decrease indend when skipping folded lines
         output.append(v)
 
-      if line_indent < lines.size():
-        lines.resize(line_indent)
+      if line_indent < tmp_lines.size(): tmp_lines.resize(line_indent)
 
       # Create new line or extend existing
       for i: int in line_indent:
-        if lines.size() - 1 < i: # Create
+        if tmp_lines.size() - 1 < i: # Create
           var l: LineInCodeEditor = LineInCodeEditor.new()
           # Extend start line up
           l.start = internal_line - skiped_lines
@@ -215,56 +253,73 @@ class LinesInCodeEditor:
           l.indent = i
           l.lineno_from = line
           l.lineno_to = line
-          lines.append(l)
+
+          tmp_lines.append(l)
         else:
           # Extend existing line
-          lines[i].length += 1 + skiped_lines
+          tmp_lines[i].length += 1 + skiped_lines
 
       skiped_lines = 0
-
       # Skip folded lines and regions
-      if ce.is_line_folded(line):
-        var subline_found: bool = false
-        if ce.is_line_code_region_start(line):
-          # Folded region
-          for subline: int in range(line + 1, p_lines_to):
-            if not ce.is_line_code_region_end(subline): continue
-            line = subline
-            subline_found = true
-            break # Break for cycle
-          if not subline_found: line = p_lines_to
+      skip_was_folded = current_line_folded
+      if skip_was_folded:
+        if ce.is_line_code_region_start(line): # Folded region count as ful commented line
+          var diff: int = skip_region(line, p_lines_to)
+          #skiped_lines += 1
+          line += diff
         else:
-          # Usual fold
-          var skipped_sublines: int = 0
-          for subline: int in range(line + 1, p_lines_to):
-            if is_line_empty(subline):
-              skipped_sublines += 1
-              continue
-            var subline_indent: int = self.indent_level(subline)
-            if subline_indent > line_indent:
-              skipped_sublines = 0 # Line not empty
-              continue
-            line = subline - skipped_sublines - 1
-            subline_found = true
-            break # Break for cycle
-          if not subline_found: line = p_lines_to
+          foldedlines.append(internal_line) # Store internal folded line
+          var diff: int = skip_fold(line, p_lines_to) # Usual fold
+          #skiped_lines += 1
+          line += diff
       line += 1
-    #End of cycle    
-    
+    #End of cycle
+
     # Output all other lines
-    var lines_count: int = self.lines_count
-    for i:int in lines.size():
-      var v: LineInCodeEditor = lines[i]
-      if p_lines_to == lines_count:
+    for i:int in tmp_lines.size():
+      var v: LineInCodeEditor = tmp_lines[i]
+      if p_lines_to == self.lines_count:
         v.lineno_to = (p_lines_to - 1) - skiped_lines
         v.close_length = self.indent_level(v.lineno_to) - v.indent
-        #v.length += 1 - skiped_lines # At end of file there is bug with lines
-        
+        # v.length += 1 - skiped_lines # At end of file there is bug with lines
       else:
         v.lineno_to = p_lines_to - 1
-        v.length += 1 
+        v.length += 1
       output.append(v)
-    lines.resize(0)
+      pass
+
+  func skip_fold(line: int, p_lines_to: int) -> int:
+    # Usual fold
+    var line_indent: int = self.indent_level(line)
+    var next_line: int = line
+    var subline_found: bool = false
+    var skipped_sublines: int = 0
+    for subline: int in range(next_line + 1, p_lines_to):
+      if is_line_empty(subline):
+        skipped_sublines += 1
+        continue
+      var subline_indent: int = self.indent_level(subline)
+      if subline_indent > line_indent:
+        skipped_sublines = 0 # Line not empty
+        continue
+      next_line = subline - skipped_sublines - 1
+      subline_found = true
+      break # Break for cycle
+    if not subline_found: next_line = p_lines_to
+    return next_line - line
+
+  func skip_region(line: int, p_lines_to: int) -> int:
+    # Folded region
+    var next_line: int = line
+    var subline_found: bool = false
+    for subline: int in range(line + 1, p_lines_to):
+      if not ce.is_line_code_region_end(subline): continue
+      next_line = subline
+      subline_found = true
+      break # Break for cycle
+    if not subline_found: next_line = p_lines_to
+    return next_line - line
+
 
 # Used as struct representiing line
 class LineInCodeEditor:
