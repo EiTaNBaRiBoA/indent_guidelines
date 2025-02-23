@@ -5,6 +5,7 @@ signal sig_plugin_disabled
 const META_KEY: String = "has_indent_guideline_plugin"
 
 func _enter_tree() -> void:
+  #print( "%x" % (Engine.get_version_info().hex) )
   if not Engine.is_editor_hint(): return
   var script_editor: ScriptEditor = EditorInterface.get_script_editor()
   if not script_editor.editor_script_changed.is_connected(_editor_script_changed):
@@ -29,31 +30,14 @@ func _editor_script_changed(_s: Script)->void:
 
 #---------------------------------------------
 
+const SETTINGS_4_3: IndentGuidelinesSettings = preload("./Settings_4_3.tres")
+const SETTINGS_4_4: IndentGuidelinesSettings = preload("./Settings_4_4.tres")
+
+
 # Based on https://github.com/godotengine/godot/pull/65757
 class CodeEditorGuideLine extends Node:
-
-  # Guidelines
-  enum GuidelinesStyle { LINE, LINE_CLOSE}
-  enum GuidelinesOffset {LEFT = 0, MIDDLE, RIGHT}
-  const guideline_color = Color(0.8, 0.8, 0.8, 0.3)
-  const guideline_active_color = Color(0.8, 0.8, 0.8, 0.55)
-  const guidelines_style: GuidelinesStyle = GuidelinesStyle.LINE_CLOSE
-  const guideline_drawside: GuidelinesOffset = GuidelinesOffset.MIDDLE
-
-  const guideline_width: float = 1.0
-  const guideline_y_offset: float = -2.0 # Used for draw guidelines a bit upper
-
-  # Fullheight line
-  const draw_fullheight_line: bool = true
-  const fillheight_line_color = Color(0.9, 0.9, 0.9, 0.1)
-  const fillheight_x_offset: float = -2.0
-
-  # Folded code marks
-  const draw_foldmarks: bool = true
-  const foldmark_color = Color(0.9, 0.9, 0.9, 0.9)
-  const foldmark_width: float = 3.0
-  const foldmark_x_offset: float = -3.0
-
+  
+  var SETTINGS: IndentGuidelinesSettings = SETTINGS_4_3 if Engine.get_version_info().hex <= 0x040300 else SETTINGS_4_4
 
   # Some consts
   const OffsetsFactor: Array[float] = [0.0, 0.5, 1.0]
@@ -72,6 +56,11 @@ class CodeEditorGuideLine extends Node:
     code_edit.add_child(self)
     code_edit.draw.connect(_draw_appendix)
     code_edit.queue_redraw()
+    
+    SETTINGS.changed.connect(func()->void:
+      print("changed")
+      code_edit.queue_redraw()
+      )
 
   # Return value scaled by editor scale
   func scaled(p_val: float)-> float:
@@ -90,7 +79,7 @@ class CodeEditorGuideLine extends Node:
     var h_scroll: float = code_edit.scroll_horizontal
 
     # X Offset
-    var guideline_offset: float = OffsetsFactor[guideline_drawside] * space_width
+    var guideline_offset: float = OffsetsFactor[SETTINGS.guideline_drawside] * space_width
 
     var caret_idx: int = code_edit.get_caret_line()
 
@@ -120,21 +109,21 @@ class CodeEditorGuideLine extends Node:
       if _x < xmargin_beg: continue
 
       #  Line color
-      var color: Color = guideline_color
+      var color: Color = SETTINGS.guideline_color
       if caret_idx > line.lineno_from and caret_idx <= line.lineno_to and lines_builder.indent_level(caret_idx) == line.indent + 1:
         # TODO: If caret not visible on screen line will not highlighted
-        color = guideline_active_color
+        color = SETTINGS.guideline_active_color
 
       # // Stack multiple guidelines.
       var line_no: int = line.lineno_to
       var offset_y: float = scaled(minf(block_ends.count(line_no) * 2.0, font.get_height(font_size) / 2.0) + 2.0)
 
-      var point_start: Vector2 = Vector2(_x, row_height * (line.start - vscroll_delta) + guideline_y_offset)
-      var point_end: Vector2 = point_start + Vector2(0.0, row_height * line.length - offset_y + guideline_y_offset)
+      var point_start: Vector2 = Vector2(_x, row_height * (line.start - vscroll_delta) + SETTINGS.guideline_y_offset)
+      var point_end: Vector2 = point_start + Vector2(0.0, row_height * line.length - offset_y + SETTINGS.guideline_y_offset)
       points.append_array([point_start, point_end])
       colors.append(color)
 
-      if guidelines_style == GuidelinesStyle.LINE_CLOSE and line.close_length > 0:
+      if SETTINGS.guidelines_style == SETTINGS.GuidelinesStyle.LINE_CLOSE and line.close_length > 0:
         #var line_indent: int = lines_builder.indent_level(line_no) + 1
         var point_side: Vector2 = point_end + Vector2(line.close_length * lines_builder.indent_size * space_width - guideline_offset, 0.0)
 
@@ -146,26 +135,26 @@ class CodeEditorGuideLine extends Node:
     # Draw lines
     if points.size() > 0:
       # As documentation said, no need to scale line width
-      RenderingServer.canvas_item_add_multiline(rid, points, colors, guideline_width)
+      RenderingServer.canvas_item_add_multiline(rid, points, colors, SETTINGS.guideline_width)
 
-    if draw_fullheight_line:
-      var _x: float = xmargin_beg + fillheight_x_offset
-      RenderingServer.canvas_item_add_line(rid, Vector2(_x, 0), Vector2(_x, code_edit.size.y), fillheight_line_color, 2.0 )
+    if SETTINGS.draw_fullheight_line:
+      var _x: float = xmargin_beg + SETTINGS.fillheight_x_offset
+      RenderingServer.canvas_item_add_line(rid, Vector2(_x, 0), Vector2(_x, code_edit.size.y), SETTINGS.fillheight_line_color, 2.0 )
       pass
 
-    if draw_foldmarks:
-      var _x: float = xmargin_beg + foldmark_x_offset
+    if SETTINGS.draw_foldmarks:
+      var _x: float = xmargin_beg + SETTINGS.foldmark_x_offset
       var folded_lines: Array[int] = code_edit.get_folded_lines()
 
       var fm_points: PackedVector2Array
       var fm_colors: PackedColorArray
       for internal_line: int in lines_builder.foldedlines:
-        var point_start: Vector2 = Vector2(_x, row_height * (internal_line - vscroll_delta))
-        var point_end: Vector2 = point_start + Vector2(0.0, row_height)
+        var point_start: Vector2 = Vector2(_x, row_height * (internal_line - vscroll_delta) + SETTINGS.foldmark_y_offset)
+        var point_end: Vector2 = point_start + Vector2(0.0, row_height + SETTINGS.foldmark_y_offset)
         fm_points.append_array([point_start, point_end])
-        fm_colors.append(foldmark_color)
+        fm_colors.append(SETTINGS.foldmark_color)
       if fm_points.size() > 0:
-        RenderingServer.canvas_item_add_multiline(rid, fm_points, fm_colors, foldmark_width)
+        RenderingServer.canvas_item_add_multiline(rid, fm_points, fm_colors, SETTINGS.foldmark_width)
     pass # /_draw_appendix
 
 
