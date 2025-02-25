@@ -57,10 +57,11 @@ class CodeEditorGuideLine extends Node:
     code_edit.draw.connect(_draw_appendix)
     code_edit.queue_redraw()
 
-    SETTINGS.changed.connect(func()->void:
-      print("changed")
-      code_edit.queue_redraw()
-      )
+    # Not working
+    #SETTINGS.changed.connect(func()->void:
+      #print("changed")
+      #code_edit.queue_redraw()
+      #)
 
   # Return value scaled by editor scale
   func scaled(p_val: float)-> float:
@@ -85,7 +86,7 @@ class CodeEditorGuideLine extends Node:
     var caret_idx: int = code_edit.get_caret_line()
 
     # // Let's avoid guidelines out of view.
-    var visible_lines_from: int = maxi(code_edit.get_first_visible_line() , 0)
+    var visible_lines_from: int = maxi(code_edit.get_first_visible_line() -1 , 0)
     var visible_lines_to: int = mini(code_edit.get_last_full_visible_line() + int(code_edit.scroll_smooth) + 10, lines_count)
 
     # V scroll bugged when you fold one of the last block
@@ -172,7 +173,6 @@ class CodeEditorGuideLine extends Node:
 
     while line < p_lines_to:
       internal_line += 1
-
       var current_line_indent: int = code_edit.get_indent_level(line) # Current line indent
       var current_indent_level: int = current_line_indent / indent_size
 
@@ -181,10 +181,10 @@ class CodeEditorGuideLine extends Node:
       if not current_line_folded:
           if code_edit.get_line(line).strip_edges().length() == 0 \
             or (code_edit.is_in_comment(line) != -1 and code_edit.is_in_comment(line) == code_edit.get_first_non_whitespace_column(line)):
-            if current_indent_level < tmp_lines.size(): # Lines with same indent count as part af scope
-              skiped_lines += 1
-              line += 1
-              continue
+              if current_indent_level <= tmp_lines.size(): # Lines with same indent count as part af scope
+                skiped_lines += 1
+                line += 1
+                continue
 
       # Close lines with indent > current line_indent
       for i:int in range(current_indent_level, tmp_lines.size()):
@@ -204,7 +204,7 @@ class CodeEditorGuideLine extends Node:
           l.start_x = internal_line - skiped_lines
           l.height = 1 + skiped_lines
           l.indent = i * indent_size
-          l.lineno_from = line
+          l.lineno_from = line - skiped_lines
           l.lineno_to = p_lines_to - 1
           tmp_lines.append(l)
         else:
