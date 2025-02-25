@@ -86,7 +86,7 @@ class CodeEditorGuideLine extends Node:
     var caret_idx: int = code_edit.get_caret_line()
 
     # // Let's avoid guidelines out of view.
-    var visible_lines_from: int = maxi(code_edit.get_first_visible_line() -1 , 0)
+    var visible_lines_from: int = maxi(code_edit.get_first_visible_line() , 0)
     var visible_lines_to: int = mini(code_edit.get_last_full_visible_line() + int(code_edit.scroll_smooth) + 10, lines_count)
 
     # V scroll bugged when you fold one of the last block
