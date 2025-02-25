@@ -252,15 +252,8 @@ class LinesInCodeEditor:
       # Skip folded lines and regions
       skip_was_folded = current_line_folded
       if skip_was_folded:
-        if ce.is_line_code_region_start(line): # Folded region count as ful commented line
-          var diff: int = skip_region(line, p_lines_to)
-          #skiped_lines += 1
-          line += diff
-        else:
-          foldedlines.append(internal_line) # Store internal folded line
-          var diff: int = skip_fold(line, p_lines_to) # Usual fold
-          #skiped_lines += 1
-          line += diff
+        foldedlines.append(internal_line) # Store internal folded line     
+        line = get_next_unfolded_line(self.ce, line) - 1   
       line += 1
     #End of cycle
 
@@ -309,6 +302,39 @@ class LinesInCodeEditor:
     if not subline_found: next_line = p_lines_to
     return next_line - line
 
+  # based on CodeEdit::fold_line
+  func get_next_unfolded_line(code_edit: CodeEdit, line: int) -> int:    
+    var p_lines_to: int = code_edit.get_line_count()
+    
+    if code_edit.is_line_code_region_start(line):
+      var region_level: int = 0
+      for i: int in range(line + 1, p_lines_to):        
+        if code_edit.is_line_code_region_start(i): region_level += 1
+        if code_edit.is_line_code_region_end(i):
+          if region_level == 0:
+            line = i
+            break
+          region_level -= 1
+    else:
+      var start_in_comment: int = code_edit.is_in_comment(line)
+      var start_in_string: int = code_edit.is_in_string(line) if start_in_comment == 1 else -1;
+      if start_in_string != -1 or start_in_comment != -1:
+        var end_line: int = code_edit.get_delimiter_end_position(line, code_edit.get_line(line).length() - 1).y
+        if end_line == line:
+          for i: int in range(line + 1, p_lines_to):
+            if start_in_string != -1 and code_edit.is_in_string(i) == -1: break
+            if start_in_comment != -1 and code_edit.is_in_comment(i) == -1: break
+            line = i
+      else:
+        var start_indent = code_edit.get_indent_level(line);
+        for i: int in range(line + 1, p_lines_to):
+          if code_edit.get_line(i).strip_edges().is_empty(): continue
+          if code_edit.get_indent_level(i) > start_indent:
+            line = i
+            continue
+          elif code_edit.is_in_comment(i) == -1 and code_edit.is_in_string(i) == -1:
+            break
+    return line + 1
 
 # Used as struct representiing line
 class LineInCodeEditor:
