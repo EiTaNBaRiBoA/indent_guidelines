@@ -118,14 +118,14 @@ class CodeEditorGuideLine extends Node:
       var line_no: int = line.lineno_to
       var offset_y: float = scaled(minf(block_ends.count(line_no) * 2.0, font.get_height(font_size) / 2.0) + 2.0)
 
-      var point_start: Vector2 = Vector2(_x, row_height * (line.start - vscroll_delta) + SETTINGS.guideline_y_offset)
-      var point_end: Vector2 = point_start + Vector2(0.0, row_height * line.length - offset_y + SETTINGS.guideline_y_offset)
+      var point_start: Vector2 = Vector2(_x, row_height * (line.start_x - vscroll_delta) + SETTINGS.guideline_y_offset)
+      var point_end: Vector2 = point_start + Vector2(0.0, row_height * line.height - offset_y + SETTINGS.guideline_y_offset)
       points.append_array([point_start, point_end])
       colors.append(color)
 
-      if SETTINGS.guidelines_style == SETTINGS.GuidelinesStyle.LINE_CLOSE and line.close_length > 0:
+      if SETTINGS.guidelines_style == SETTINGS.GuidelinesStyle.LINE_CLOSE and line.close_width > 0:
         #var line_indent: int = lines_builder.indent_level(line_no) + 1
-        var point_side: Vector2 = point_end + Vector2(line.close_length * lines_builder.indent_size * space_width - guideline_offset, 0.0)
+        var point_side: Vector2 = point_end + Vector2(line.close_width * lines_builder.indent_size * space_width - guideline_offset, 0.0)
 
         points.append_array([point_end, point_side])
         colors.append(color)
@@ -226,8 +226,8 @@ class LinesInCodeEditor:
       for i:int in range(line_indent, tmp_lines.size()):
         var v: LineInCodeEditor = tmp_lines[i]
         v.lineno_to = line - skiped_lines - 1
-        v.close_length = self.indent_level(v.lineno_to) - v.indent
-        if skip_was_folded: v.close_length -= 1 # Decrease indend when skipping folded lines
+        v.close_width = self.indent_level(v.lineno_to) - v.indent
+        if skip_was_folded: v.close_width -= 1 # Decrease indend when skipping folded lines
         output.append(v)
 
       if line_indent < tmp_lines.size(): tmp_lines.resize(line_indent)
@@ -237,16 +237,15 @@ class LinesInCodeEditor:
         if tmp_lines.size() - 1 < i: # Create
           var l: LineInCodeEditor = LineInCodeEditor.new()
           # Extend start line up
-          l.start = internal_line - skiped_lines
-          l.length = 1 + skiped_lines
+          l.start_x = internal_line - skiped_lines
+          l.height = 1 + skiped_lines
           l.indent = i
           l.lineno_from = line
           l.lineno_to = line
-
           tmp_lines.append(l)
         else:
           # Extend existing line
-          tmp_lines[i].length += 1 + skiped_lines
+          tmp_lines[i].height += 1 + skiped_lines
 
       skiped_lines = 0
       # Skip folded lines and regions
@@ -262,11 +261,11 @@ class LinesInCodeEditor:
       var v: LineInCodeEditor = tmp_lines[i]
       if p_lines_to == self.lines_count:
         v.lineno_to = (p_lines_to - 1) - skiped_lines
-        v.close_length = self.indent_level(v.lineno_to) - v.indent
+        v.close_width = self.indent_level(v.lineno_to) - v.indent
         # v.length += 1 - skiped_lines # At end of file there is bug with lines
       else:
         v.lineno_to = p_lines_to - 1
-        v.length += 1
+        v.height += 1
       output.append(v)
       pass
 
@@ -338,9 +337,9 @@ class LinesInCodeEditor:
 
 # Used as struct representiing line
 class LineInCodeEditor:
-  var start: int = 0 # Line start X
-  var length: int = 1 # Line length from start
+  var start_x: int = 0 # Line start X
+  var height: int = 1 # Line length from start
   var indent: int = -1 # Line indent
   var lineno_from: int = -1 # Line "from" number in CodeEdit
   var lineno_to: int = -1 # Line "to" number in CodeEdit
-  var close_length: int = 0 # Side/Close line length
+  var close_width: int = 0 # Side/Close line length
