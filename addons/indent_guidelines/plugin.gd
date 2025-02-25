@@ -36,7 +36,7 @@ const SETTINGS_4_4: IndentGuidelinesSettings = preload("./Settings_4_4.tres")
 
 # Based on https://github.com/godotengine/godot/pull/65757
 class CodeEditorGuideLine extends Node:
-  
+
   var SETTINGS: IndentGuidelinesSettings = SETTINGS_4_3 if Engine.get_version_info().hex <= 0x040300 else SETTINGS_4_4
 
   # Some consts
@@ -56,7 +56,7 @@ class CodeEditorGuideLine extends Node:
     code_edit.add_child(self)
     code_edit.draw.connect(_draw_appendix)
     code_edit.queue_redraw()
-    
+
     SETTINGS.changed.connect(func()->void:
       print("changed")
       code_edit.queue_redraw()
@@ -96,7 +96,7 @@ class CodeEditorGuideLine extends Node:
 
     # Generate lines
     var lines_builder: LinesInCodeEditor = LinesInCodeEditor.new(code_edit)
-    lines_builder.build(visible_lines_from, visible_lines_to)
+    lines_builder.build(code_edit, visible_lines_from, visible_lines_to)
 
     # Prepare draw
     var points: PackedVector2Array
@@ -110,7 +110,7 @@ class CodeEditorGuideLine extends Node:
 
       #  Line color
       var color: Color = SETTINGS.guideline_color
-      if caret_idx > line.lineno_from and caret_idx <= line.lineno_to and lines_builder.indent_level(caret_idx) == line.indent + 1:
+      if caret_idx > line.lineno_from and caret_idx <= line.lineno_to and lines_builder.indent_level(code_edit, caret_idx) == line.indent + 1:
         # TODO: If caret not visible on screen line will not highlighted
         color = SETTINGS.guideline_active_color
 
@@ -163,29 +163,25 @@ class LinesInCodeEditor:
   var output: Array[LineInCodeEditor] = []
   var foldedlines: PackedInt32Array = []
 
-  var ce: CodeEdit
+
   var indent_size: int
-  var lines_count: int
 
-  func _init(p_ce: CodeEdit) -> void:
-    self.ce = p_ce
-    self.indent_size = p_ce.indent_size
-
-    self.lines_count = p_ce.get_line_count()
+  func _init(code_edit: CodeEdit) -> void:
+    self.indent_size = code_edit.indent_size
 
     # get indent size from
-    for l: int in self.lines_count:
-      if self.is_line_empty(l): continue
-      if self.is_line_full_commented(l): continue
-      var il: int = p_ce.get_indent_level(l)
+    for l: int in code_edit.get_line_count():
+      if self.is_line_empty(code_edit, l): continue
+      if self.is_line_full_commented(code_edit, l): continue
+      var il: int = code_edit.get_indent_level(l)
       if ( il > 0):
         self.indent_size = il
         break
 
   # Return indent level 0,1,2,3..
   # TODO: invent how not to use `indent_size`
-  func indent_level(p_line: int)-> int:
-    return ce.get_indent_level(p_line) / self.indent_size
+  func indent_level(code_edit: CodeEdit, p_line: int)-> int:
+    return code_edit.get_indent_level(p_line) / self.indent_size
 
   # Return comment index in line
   # !!!!!!!!! Seems not work like described
@@ -193,16 +189,16 @@ class LinesInCodeEditor:
   #  return ce.is_in_comment(p_line)
 
   # Check if line is empty
-  func is_line_empty(p_line: int)-> bool:
-    #return ce.get_line(p_line).strip_edges().length() == 0
-    return ce.get_line(p_line).length() == ce.get_first_non_whitespace_column(p_line)
+  func is_line_empty(code_edit: CodeEdit, p_line: int)-> bool:
+    return code_edit.get_line(p_line).strip_edges().length() == 0
+    #return ce.get_line(p_line).length() == ce.get_first_non_whitespace_column(p_line)
 
   # Check if first visible character in line is comment
-  func is_line_full_commented(p_line: int)->bool:
-    return ce.is_in_comment(p_line) != -1 and ce.get_first_non_whitespace_column(p_line) >= 0
+  func is_line_full_commented(code_edit: CodeEdit, p_line: int)->bool:
+    return code_edit.is_in_comment(p_line) != -1 and code_edit.is_in_comment(p_line) == code_edit.get_first_non_whitespace_column(p_line)
 
   # Main func
-  func build(p_lines_from: int, p_lines_to: int)->void:
+  func build(code_edit: CodeEdit, p_lines_from: int, p_lines_to: int)->void:
     var skiped_lines: int = 0
     var internal_line: int = -1
     var tmp_lines: Array[LineInCodeEditor] = []
@@ -213,20 +209,22 @@ class LinesInCodeEditor:
     while line < p_lines_to:
       internal_line += 1
 
-      #If line empty, count it and pass to next line
-      var current_line_folded: bool = ce.is_line_folded(line)
-      if (is_line_empty(line) or is_line_full_commented(line)) and !current_line_folded :
-        skiped_lines += 1
-        line += 1
-        continue
+      var line_indent: int = self.indent_level(code_edit, line) # Current line indent
 
-      var line_indent: int = self.indent_level(line) # Current line indent
+      #If line empty, count it and pass to next line
+      var current_line_folded: bool = code_edit.is_line_folded(line)
+      if not current_line_folded:
+          if is_line_empty(code_edit, line) or is_line_full_commented(code_edit, line):
+            if line_indent < tmp_lines.size():
+              skiped_lines += 1
+              line += 1
+              continue
 
       # Close lines with indent > current line_indent
       for i:int in range(line_indent, tmp_lines.size()):
         var v: LineInCodeEditor = tmp_lines[i]
         v.lineno_to = line - skiped_lines - 1
-        v.close_width = self.indent_level(v.lineno_to) - v.indent
+        v.close_width = self.indent_level(code_edit, v.lineno_to) - v.indent
         if skip_was_folded: v.close_width -= 1 # Decrease indend when skipping folded lines
         output.append(v)
 
@@ -241,7 +239,7 @@ class LinesInCodeEditor:
           l.height = 1 + skiped_lines
           l.indent = i
           l.lineno_from = line
-          l.lineno_to = line
+          l.lineno_to = p_lines_to - 1
           tmp_lines.append(l)
         else:
           # Extend existing line
@@ -251,35 +249,36 @@ class LinesInCodeEditor:
       # Skip folded lines and regions
       skip_was_folded = current_line_folded
       if skip_was_folded:
-        foldedlines.append(internal_line) # Store internal folded line     
-        line = get_next_unfolded_line(self.ce, line) - 1   
+        foldedlines.append(internal_line) # Store internal folded line
+        line = get_next_unfolded_line(code_edit, line) - 1
       line += 1
     #End of cycle
 
+    var lines_count = code_edit.get_line_count()
     # Output all other lines
     for i:int in tmp_lines.size():
       var v: LineInCodeEditor = tmp_lines[i]
-      if p_lines_to == self.lines_count:
-        v.lineno_to = (p_lines_to - 1) - skiped_lines
-        v.close_width = self.indent_level(v.lineno_to) - v.indent
-        # v.length += 1 - skiped_lines # At end of file there is bug with lines
+      if p_lines_to == lines_count:
+        v.lineno_to -= skiped_lines
+        v.close_width = self.indent_level(code_edit, v.lineno_to) - v.indent
+        # v.height += 1 - skiped_lines # At end of file there is bug with lines
       else:
         v.lineno_to = p_lines_to - 1
         v.height += 1
       output.append(v)
       pass
 
-  func skip_fold(line: int, p_lines_to: int) -> int:
+  func skip_fold(code_edit: CodeEdit, line: int, p_lines_to: int) -> int:
     # Usual fold
-    var line_indent: int = self.indent_level(line)
+    var line_indent: int = self.indent_level(code_edit, line)
     var next_line: int = line
     var subline_found: bool = false
     var skipped_sublines: int = 0
     for subline: int in range(next_line + 1, p_lines_to):
-      if is_line_empty(subline):
+      if is_line_empty(code_edit, subline):
         skipped_sublines += 1
         continue
-      var subline_indent: int = self.indent_level(subline)
+      var subline_indent: int = self.indent_level(code_edit, subline)
       if subline_indent > line_indent:
         skipped_sublines = 0 # Line not empty
         continue
@@ -289,12 +288,12 @@ class LinesInCodeEditor:
     if not subline_found: next_line = p_lines_to
     return next_line - line
 
-  func skip_region(line: int, p_lines_to: int) -> int:
+  func skip_region(code_edit: CodeEdit, line: int, p_lines_to: int) -> int:
     # Folded region
     var next_line: int = line
     var subline_found: bool = false
     for subline: int in range(line + 1, p_lines_to):
-      if not ce.is_line_code_region_end(subline): continue
+      if not code_edit.is_line_code_region_end(subline): continue
       next_line = subline
       subline_found = true
       break # Break for cycle
@@ -302,12 +301,12 @@ class LinesInCodeEditor:
     return next_line - line
 
   # based on CodeEdit::fold_line
-  func get_next_unfolded_line(code_edit: CodeEdit, line: int) -> int:    
+  func get_next_unfolded_line(code_edit: CodeEdit, line: int) -> int:
     var p_lines_to: int = code_edit.get_line_count()
-    
+
     if code_edit.is_line_code_region_start(line):
       var region_level: int = 0
-      for i: int in range(line + 1, p_lines_to):        
+      for i: int in range(line + 1, p_lines_to):
         if code_edit.is_line_code_region_start(i): region_level += 1
         if code_edit.is_line_code_region_end(i):
           if region_level == 0:
@@ -338,7 +337,7 @@ class LinesInCodeEditor:
 # Used as struct representiing line
 class LineInCodeEditor:
   var start_x: int = 0 # Line start X
-  var height: int = 1 # Line length from start
+  var height: int = 1 # Line height from start
   var indent: int = -1 # Line indent
   var lineno_from: int = -1 # Line "from" number in CodeEdit
   var lineno_to: int = -1 # Line "to" number in CodeEdit
