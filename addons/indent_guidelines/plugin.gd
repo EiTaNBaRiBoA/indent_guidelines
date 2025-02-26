@@ -5,7 +5,6 @@ signal sig_plugin_disabled
 const META_KEY: String = "has_indent_guideline_plugin"
 
 func _enter_tree() -> void:
-  #print( "%x" % (Engine.get_version_info().hex) )
   if not Engine.is_editor_hint(): return
   var script_editor: ScriptEditor = EditorInterface.get_script_editor()
   if not script_editor.editor_script_changed.is_connected(_editor_script_changed):
@@ -57,12 +56,6 @@ class CodeEditorGuideLine extends Node:
     code_edit.draw.connect(_draw_appendix)
     code_edit.queue_redraw()
 
-    # Not working
-    #SETTINGS.changed.connect(func()->void:
-      #print("changed")
-      #code_edit.queue_redraw()
-      #)
-
   # Return value scaled by editor scale
   func scaled(p_val: float)-> float:
     return p_val * (float(editor_scale) / 100.0)
@@ -90,14 +83,13 @@ class CodeEditorGuideLine extends Node:
     var visible_lines_to: int = mini(code_edit.get_last_full_visible_line() + int(code_edit.scroll_smooth) + 10, lines_count)
 
     # V scroll bugged when you fold one of the last block
-    var vscroll_delta: float = maxf(v_scroll, visible_lines_from) - visible_lines_from
+    #var vscroll_delta: float = maxf(v_scroll, visible_lines_from) - visible_lines_from
+    var vscroll_delta: float = v_scroll - floorf(v_scroll)
 
     # Inlude last ten lines
-    if lines_count - visible_lines_to <= 10:
-      visible_lines_to = lines_count
+    if lines_count - visible_lines_to <= 10: visible_lines_to = lines_count
 
     # Generate lines
-
     var output: Array[LineInCodeEditor] = []
     var foldedlines: PackedInt32Array = []
     build_lines(code_edit, visible_lines_from, visible_lines_to, output, foldedlines)
