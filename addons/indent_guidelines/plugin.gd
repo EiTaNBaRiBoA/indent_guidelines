@@ -121,16 +121,13 @@ class CodeEditorGuideLine extends Node:
       # // Stack multiple guidelines.
       var line_no: int = line.lineno_to
       var offset_y: float = scaled(minf(block_ends.count(line_no) * 2.0, font.get_height(font_size) / 2.0) + 2.0)
-
       var point_start: Vector2 = Vector2(_x, row_height * (line.start_x - vscroll_delta) + SETTINGS.guideline_y_offset)
       var point_end: Vector2 = point_start + Vector2(0.0, row_height * line.height - offset_y + SETTINGS.guideline_y_offset)
       points.append_array([point_start, point_end])
       colors.append(color)
 
       if SETTINGS.guidelines_style == SETTINGS.GuidelinesStyle.LINE_CLOSE and line.close_width > 0:
-        #var line_indent: int = lines_builder.indent_level(line_no) + 1
         var point_side: Vector2 = point_end + Vector2(line.close_width * space_width - guideline_offset, 0.0)
-
         points.append_array([point_end, point_side])
         colors.append(color)
         block_ends.append(line_no)
@@ -178,13 +175,13 @@ class CodeEditorGuideLine extends Node:
 
       #If line empty, count it and pass to next line
       var current_line_folded: bool = code_edit.is_line_folded(line)
-      if not current_line_folded:
+      if !current_line_folded:
           if code_edit.get_line(line).strip_edges().length() == 0 \
-            or (code_edit.is_in_comment(line) != -1 and code_edit.is_in_comment(line) == code_edit.get_first_non_whitespace_column(line)):
-              if current_indent_level <= tmp_lines.size(): # Lines with same indent count as part af scope
-                skiped_lines += 1
-                line += 1
-                continue
+            or (current_indent_level <= tmp_lines.size() and code_edit.is_in_comment(line) != -1 and code_edit.is_in_comment(line) == code_edit.get_first_non_whitespace_column(line)):
+              # Lines with same indent count as part af scope
+              skiped_lines += 1
+              line += 1
+              continue
 
       # Close lines with indent > current line_indent
       for i:int in range(current_indent_level, tmp_lines.size()):
@@ -269,7 +266,7 @@ class CodeEditorGuideLine extends Node:
             break
     return line + 1
 
-# Used as struct representiing line
+# Used as struct representing line
 class LineInCodeEditor:
   var start_x: int = 0 # Line start X
   var height: int = 1 # Line height from start
