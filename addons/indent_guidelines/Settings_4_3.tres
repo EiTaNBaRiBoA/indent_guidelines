@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="IndentGuidelinesSettings" load_steps=2 format=3 uid="uid://d256qcearrd18"]
 
-[ext_resource type="Script" uid="uid://ckdw6kn0pa4bj" path="res://addons/indent_guidelines/Settings.gd" id="1_wx83l"]
+[ext_resource type="Script" uid="uid://do4qww10hg5ed" path="res://addons/indent_guidelines/Settings.gd" id="1_wx83l"]
 
 [resource]
 script = ExtResource("1_wx83l")
@@ -18,4 +18,3 @@ foldmark_color = Color(0.9, 0.9, 0.9, 0.9)
 foldmark_width = 3.0
 foldmark_x_offset = -3.0
 foldmark_y_offset = 2.0
-metadata/_custom_type_script = "uid://ckdw6kn0pa4bj"
