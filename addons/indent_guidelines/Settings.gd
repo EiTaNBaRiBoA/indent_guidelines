@@ -2,7 +2,7 @@ extends Resource
 class_name IndentGuidelinesSettings
 
 
- # Guidelines
+# Guidelines
 enum GuidelinesStyle { LINE, LINE_CLOSE}
 enum GuidelinesOffset {LEFT = 0, MIDDLE, RIGHT}
 
@@ -14,6 +14,7 @@ enum GuidelinesOffset {LEFT = 0, MIDDLE, RIGHT}
 
 @export var guideline_width: float = 1.0
 @export var guideline_y_offset: float = -2.0 # Used for draw guidelines a bit upper
+@export var guideline_keep_caret: bool = true
 
 # Fullheight line
 @export_category("Full height line")

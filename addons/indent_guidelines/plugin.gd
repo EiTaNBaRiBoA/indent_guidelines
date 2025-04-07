@@ -77,22 +77,53 @@ class CodeEditorGuideLine extends Node:
     var guideline_offset: float = OffsetsFactor[SETTINGS.guideline_drawside] * space_width
 
     var caret_idx: int = code_edit.get_caret_line()
+    var caret_indent: int = code_edit.get_indent_level(caret_idx)
 
     # // Let's avoid guidelines out of view.
     var visible_lines_from: int = maxi(code_edit.get_first_visible_line() , 0)
     var visible_lines_to: int = mini(code_edit.get_last_full_visible_line() + int(code_edit.scroll_smooth) + 10, lines_count)
 
     # V scroll bugged when you fold one of the last block
-    #var vscroll_delta: float = maxf(v_scroll, visible_lines_from) - visible_lines_from
     var vscroll_delta: float = v_scroll - floorf(v_scroll)
 
-    # Inlude last ten lines
+    # Include last ten lines
     if lines_count - visible_lines_to <= 10: visible_lines_to = lines_count
 
     # Generate lines
     var output: Array[LineInCodeEditor] = []
     var foldedlines: PackedInt32Array = []
     build_lines(code_edit, visible_lines_from, visible_lines_to, output, foldedlines)
+
+    if SETTINGS.guideline_keep_caret:
+      var caret_lines: Array[LineInCodeEditor] = []
+      var _foldedlines: PackedInt32Array = []
+
+      if caret_idx < visible_lines_from:
+        build_lines(code_edit, caret_idx - 1, visible_lines_from + 1, caret_lines, _foldedlines)
+
+      # Used get_last_full_visible_line cuz visible_lines_to can be == caret_idx
+      if caret_idx > code_edit.get_last_full_visible_line(): #visible_lines_to:
+         build_lines(code_edit, visible_lines_to - 1, caret_idx + 1, caret_lines, _foldedlines)
+
+      caret_lines = caret_lines.filter(func(l: LineInCodeEditor) -> bool:
+        return l.lineno_from <= caret_idx and caret_idx <= l.lineno_to and l.indent == caret_indent - indent_size
+      )
+
+      if caret_lines.size() == 1:
+        var nl: LineInCodeEditor = caret_lines[0]
+        # Update array with Lines
+        for l: LineInCodeEditor in output:
+          if l.lineno_from <= nl.lineno_from and  nl.lineno_from <= l.lineno_to and nl.indent == l.indent:
+            l.lineno_from = mini(l.lineno_from, nl.lineno_from)
+            l.lineno_to = maxi(l.lineno_to, nl.lineno_to)
+            break
+          if l.lineno_from <= nl.lineno_to and  nl.lineno_to <= l.lineno_to and nl.indent == l.indent:
+            l.lineno_from = mini(l.lineno_from, nl.lineno_from)
+            l.lineno_to = maxi(l.lineno_to, nl.lineno_to)
+            break
+
+      pass
+
 
     # Prepare draw
     var points: PackedVector2Array
@@ -106,7 +137,7 @@ class CodeEditorGuideLine extends Node:
 
       #  Line color
       var color: Color = SETTINGS.guideline_color
-      if caret_idx > line.lineno_from and caret_idx <= line.lineno_to and code_edit.get_indent_level(caret_idx) == line.indent + indent_size:
+      if caret_idx >= line.lineno_from and caret_idx <= line.lineno_to and caret_indent == line.indent + indent_size:
         # TODO: If caret not visible on screen line will not highlighted
         color = SETTINGS.guideline_active_color
 
@@ -151,8 +182,9 @@ class CodeEditorGuideLine extends Node:
     pass # /_draw_appendix
 
 
+
   # Lines builder
-  func build_lines(code_edit: CodeEdit, p_lines_from: int, p_lines_to: int, output: Array[LineInCodeEditor], foldedlines: PackedInt32Array)->void:
+  func build_lines(code_edit: CodeEdit, p_lines_from: int, p_lines_to: int, output: Array[LineInCodeEditor], foldedlines: PackedInt32Array ) -> void:
     var indent_size: int = code_edit.indent_size
     var skiped_lines: int = 0
     var internal_line: int = -1
@@ -170,7 +202,7 @@ class CodeEditorGuideLine extends Node:
       if !current_line_folded:
           if code_edit.get_line(line).strip_edges().length() == 0 \
             or (current_indent_level <= tmp_lines.size() and code_edit.is_in_comment(line) != -1 and code_edit.is_in_comment(line) == code_edit.get_first_non_whitespace_column(line)):
-              # Lines with same indent count as part af scope
+              # Lines with same indent count as part of scope
               skiped_lines += 1
               line += 1
               continue
@@ -223,6 +255,7 @@ class CodeEditorGuideLine extends Node:
         v.height += 1
       output.append(v)
       pass
+    pass #/build_lines
 
   # based on CodeEdit::fold_line
   func get_next_unfolded_line(code_edit: CodeEdit, line: int) -> int:
