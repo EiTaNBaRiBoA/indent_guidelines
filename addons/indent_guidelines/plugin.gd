@@ -99,11 +99,11 @@ class CodeEditorGuideLine extends Node:
       var _foldedlines: PackedInt32Array = []
 
       if caret_idx < visible_lines_from:
-        build_lines(code_edit, caret_idx - 1, visible_lines_from + 1, caret_lines, _foldedlines)
+        build_lines(code_edit, maxi(caret_idx - 1, 0), visible_lines_from + 1, caret_lines, _foldedlines)
 
       # Used get_last_full_visible_line cuz visible_lines_to can be == caret_idx
       if caret_idx > code_edit.get_last_full_visible_line(): #visible_lines_to:
-         build_lines(code_edit, visible_lines_to - 1, caret_idx + 1, caret_lines, _foldedlines)
+        build_lines(code_edit, maxi(visible_lines_to - 1, 0), caret_idx + 1, caret_lines, _foldedlines)
 
       caret_lines = caret_lines.filter(func(l: LineInCodeEditor) -> bool:
         return l.lineno_from <= caret_idx and caret_idx <= l.lineno_to and l.indent == caret_indent - indent_size
